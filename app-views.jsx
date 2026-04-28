@@ -404,7 +404,7 @@ const COL_ORDER = ['todo', 'in-progress', 'done'];
 const COL_LABELS = { 'todo': 'To Do', 'in-progress': 'In Progress', 'done': 'Done' };
 const COL_ACCENTS = { 'todo': '#5a6068', 'in-progress': '#00e5d4', 'done': '#1de9b6' };
 
-function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask, onAddTask }) {
+function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask, onAddTask, onReorderTask }) {
   const allProjects = workspace.areas.flatMap(a => a.projects);
   const [activeProjectId, setActiveProjectId] = React.useState(
     selectedProject || allProjects[0]?.id
@@ -415,9 +415,11 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
 
   const proj = allProjects.find(p => p.id === activeProjectId) || allProjects[0];
   const [dragOver, setDragOver] = React.useState(null);
+  const [dragOverTaskId, setDragOverTaskId] = React.useState(null);
   const [addingTo, setAddingTo] = React.useState(null); // column id
 
   const move = (taskId, toStatus) => onMoveTask && onMoveTask(proj.id, taskId, toStatus);
+  const reorder = (taskId, targetTaskId) => onReorderTask && onReorderTask(proj.id, taskId, targetTaskId);
 
   return (
     <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -450,12 +452,18 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
           return (
             <div key={colId}
               onDragOver={e => { e.preventDefault(); setDragOver(colId); }}
-              onDragLeave={() => setDragOver(null)}
+              onDragLeave={e => {
+                // Only clear column highlight if not entering a child
+                if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null);
+              }}
               onDrop={e => {
                 e.preventDefault();
                 const taskId = e.dataTransfer.getData('taskId');
-                if (taskId) move(taskId, colId);
+                const fromStatus = e.dataTransfer.getData('taskStatus');
+                // Only handle drops directly on column (not on a card — cards handle their own drops)
+                if (taskId && fromStatus !== colId) move(taskId, colId);
                 setDragOver(null);
+                setDragOverTaskId(null);
               }}
               style={{
                 display: 'flex', flexDirection: 'column',
@@ -481,7 +489,11 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
                 {tasks.map(t => (
                   <KanbanCard key={t.id} task={t} colId={colId} theme={theme}
                     onOpen={() => onOpenTask(t, proj)}
-                    onMove={move} />
+                    onMove={move}
+                    onReorder={reorder}
+                    isDragOver={dragOverTaskId === t.id}
+                    onDragOverTask={id => { setDragOverTaskId(id); setDragOver(null); }}
+                    onDragLeaveTask={() => setDragOverTaskId(null)} />
                 ))}
                 {tasks.length === 0 && !isOver && (
                   <div style={{ border: `1.5px dashed ${theme.border}`, borderRadius: 10, height: 72,
@@ -505,39 +517,73 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
   );
 }
 
-function KanbanCard({ task, colId, theme, onOpen, onMove }) {
+function KanbanCard({ task, colId, theme, onOpen, onMove, onReorder, isDragOver, onDragOverTask, onDragLeaveTask }) {
   const colIdx = COL_ORDER.indexOf(colId);
   const overdue = isOverdue(task.due) && task.status !== 'done';
 
   return (
-    <div
-      draggable
-      onDragStart={e => e.dataTransfer.setData('taskId', task.id)}
-      onClick={onOpen}
-      style={{
-        background: theme.surface, borderRadius: 10, padding: '12px 13px',
-        border: `1px solid ${overdue ? 'rgba(244,117,117,0.5)' : 'rgba(255,255,255,0.05)'}`,
-        boxShadow: theme.cardShadow, cursor: 'pointer',
-        transition: 'transform 0.1s, box-shadow 0.1s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = theme.cardShadowHover; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = theme.cardShadow; }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 500, color: theme.text, lineHeight: 1.4, marginBottom: 8 }}>{task.title}</div>
-      {task.notes && <div style={{ fontSize: 11, color: theme.mutedText, marginBottom: 8, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.notes}</div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {priorityBadge(task.priority)}
-        {task.due && <span style={{ fontSize: 10, fontFamily: 'inherit', color: overdue ? '#f47575' : '#5a6068', marginLeft: 2 }}>
-          {overdue ? '⚠ ' : ''}{fmtDate(task.due)}
-        </span>}
-        {/* Move arrows */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()}>
-          {colIdx > 0 && (
-            <button onClick={() => onMove(task.id, COL_ORDER[colIdx - 1])} style={arrowBtnStyle(theme)} title="Move back">←</button>
-          )}
-          {colIdx < COL_ORDER.length - 1 && (
-            <button onClick={() => onMove(task.id, COL_ORDER[colIdx + 1])} style={{ ...arrowBtnStyle(theme), background: 'rgba(0,229,212,0.12)', borderColor: 'rgba(0,229,212,0.35)', color: '#00e5d4' }} title="Move forward">→</button>
-          )}
+    <div>
+      {/* Drop indicator: cyan line above this card when dragging a same-column task over it */}
+      {isDragOver && (
+        <div style={{ height: 2, background: '#00e5d4', borderRadius: 2, marginBottom: 4, boxShadow: '0 0 6px #00e5d480' }} />
+      )}
+      <div
+        draggable
+        onDragStart={e => {
+          e.dataTransfer.setData('taskId', task.id);
+          e.dataTransfer.setData('taskStatus', task.status);
+        }}
+        onDragOver={e => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDragOverTask && onDragOverTask(task.id);
+        }}
+        onDragLeave={e => {
+          e.stopPropagation();
+          onDragLeaveTask && onDragLeaveTask();
+        }}
+        onDrop={e => {
+          e.preventDefault();
+          e.stopPropagation();
+          const draggedId = e.dataTransfer.getData('taskId');
+          const fromStatus = e.dataTransfer.getData('taskStatus');
+          if (draggedId && draggedId !== task.id) {
+            if (fromStatus === colId) {
+              // Same column: reorder
+              onReorder && onReorder(draggedId, task.id);
+            } else {
+              // Different column: move (status change)
+              onMove && onMove(draggedId, colId);
+            }
+          }
+          onDragLeaveTask && onDragLeaveTask();
+        }}
+        onClick={onOpen}
+        style={{
+          background: theme.surface, borderRadius: 10, padding: '12px 13px',
+          border: `1px solid ${overdue ? 'rgba(244,117,117,0.5)' : 'rgba(255,255,255,0.05)'}`,
+          boxShadow: theme.cardShadow, cursor: 'pointer',
+          transition: 'transform 0.1s, box-shadow 0.1s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = theme.cardShadowHover; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = theme.cardShadow; }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 500, color: theme.text, lineHeight: 1.4, marginBottom: 8 }}>{task.title}</div>
+        {task.notes && <div style={{ fontSize: 11, color: theme.mutedText, marginBottom: 8, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.notes}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {priorityBadge(task.priority)}
+          {task.due && <span style={{ fontSize: 10, fontFamily: 'inherit', color: overdue ? '#f47575' : '#5a6068', marginLeft: 2 }}>
+            {overdue ? '⚠ ' : ''}{fmtDate(task.due)}
+          </span>}
+          {/* Move arrows */}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+            {colIdx > 0 && (
+              <button onClick={() => onMove(task.id, COL_ORDER[colIdx - 1])} style={arrowBtnStyle(theme)} title="Move back">←</button>
+            )}
+            {colIdx < COL_ORDER.length - 1 && (
+              <button onClick={() => onMove(task.id, COL_ORDER[colIdx + 1])} style={{ ...arrowBtnStyle(theme), background: 'rgba(0,229,212,0.12)', borderColor: 'rgba(0,229,212,0.35)', color: '#00e5d4' }} title="Move forward">→</button>
+            )}
+          </div>
         </div>
       </div>
     </div>

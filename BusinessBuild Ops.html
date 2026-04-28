@@ -195,19 +195,21 @@ function deleteProjectInWs(workspaces, wsId, projId) {
   });
 }
 
-// Reorder tasks within a column
-function reorderTaskInWs(workspaces, wsId, projId, taskId, targetIndex) {
+// Reorder tasks within a column (insert taskId before targetTaskId)
+function reorderTaskInWs(workspaces, wsId, projId, taskId, targetTaskId) {
   return workspaces.map(function(ws) {
     if (ws.id !== wsId) return ws;
     return Object.assign({}, ws, { areas: ws.areas.map(function(area) {
       return Object.assign({}, area, { projects: area.projects.map(function(proj) {
         if (proj.id !== projId) return proj;
-        var tasks = proj.tasks.slice();
-        var fromIndex = tasks.findIndex(function(t) { return t.id === taskId; });
-        if (fromIndex === -1) return proj;
-        var task = tasks.splice(fromIndex, 1)[0];
-        tasks.splice(targetIndex, 0, task);
-        return Object.assign({}, proj, { tasks: tasks });
+        var tasks = proj.tasks || [];
+        var moving = tasks.find(function(t) { return t.id === taskId; });
+        if (!moving) return proj;
+        var without = tasks.filter(function(t) { return t.id !== taskId; });
+        var targetIdx = without.findIndex(function(t) { return t.id === targetTaskId; });
+        var insertAt = targetIdx >= 0 ? targetIdx : without.length;
+        var newTasks = without.slice(0, insertAt).concat([moving], without.slice(insertAt));
+        return Object.assign({}, proj, { tasks: newTasks });
       })});
     })});
   });
@@ -372,8 +374,8 @@ function App() {
     setWorkspaces(prev => deleteProjectInWs(prev, wsId, projId));
     if (selectedProject === projId) setSelectedProject(null);
   };
-  const handleReorderTask = (projId, taskId, targetIndex) => {
-    setWorkspaces(prev => reorderTaskInWs(prev, wsId, projId, taskId, targetIndex));
+  const handleReorderTask = (projId, taskId, targetTaskId) => {
+    setWorkspaces(prev => reorderTaskInWs(prev, wsId, projId, taskId, targetTaskId));
   };
 
   const handleSwitchWs = (id) => {
