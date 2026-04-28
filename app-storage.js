@@ -49,10 +49,13 @@
   }
 
   function importJSON(onSuccess, onError) {
+    var _onSuccess = onSuccess || function() {};
+    var _onError = onError || function() {};
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
     input.onchange = function (e) {
+      document.body.removeChild(input);
       var file = e.target.files[0];
       if (!file) return;
       var reader = new FileReader();
@@ -60,19 +63,18 @@
         try {
           var parsed = JSON.parse(ev.target.result);
           if (!parsed.workspaces || !Array.isArray(parsed.workspaces)) {
-            onError('Invalid file: missing workspaces array');
+            _onError('Invalid file: missing workspaces array');
             return;
           }
-          onSuccess(parsed.workspaces);
+          _onSuccess(parsed.workspaces);
         } catch (err) {
-          onError('Invalid JSON file');
+          _onError('Invalid JSON file');
         }
       };
       reader.readAsText(file);
     };
     document.body.appendChild(input);
     input.click();
-    document.body.removeChild(input);
   }
 
   function clear() {
