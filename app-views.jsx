@@ -89,7 +89,87 @@ function VelocitySparkline() {
   );
 }
 
-function DashboardView({ workspace, theme, onOpenTask, onNewProject }) {
+// ── OVERDUE CARD ─────────────────────────────────────────────────────────────
+function OverdueCard({ workspaces, overdueMap, onOpenTask, theme }) {
+  var today = new Date().toISOString().slice(0, 10);
+
+  // Collect all overdue tasks grouped by project, across all workspaces
+  var groups = [];
+  var anyDue = false;
+  (workspaces || []).forEach(function(ws) {
+    (ws.areas || []).forEach(function(area) {
+      (area.projects || []).forEach(function(proj) {
+        var overdueTasks = (proj.tasks || []).filter(function(t) {
+          if (t.due) anyDue = true;
+          return t.due && t.due < today && t.status !== 'done';
+        });
+        if (overdueTasks.length > 0) {
+          groups.push({ projectName: proj.name, areaName: area.name, proj: proj, tasks: overdueTasks });
+        }
+      });
+    });
+  });
+
+  // Check if any task has a due date at all
+  if (!anyDue) return null;
+
+  var card = {
+    background: '#0d0f15',
+    border: '1px solid rgba(255,255,255,0.05)',
+    borderRadius: 14,
+    padding: 16,
+  };
+
+  if (groups.length === 0) {
+    return (
+      <div style={card}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', marginBottom: 12 }}>Overdue</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#1de9b6' }}>
+          <span style={{ fontSize: 14 }}>✓</span>
+          <span>All clear — no overdue tasks</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', marginBottom: 12 }}>Overdue</div>
+      {groups.map(function(group, gi) {
+        return (
+          <div key={group.proj.id}>
+            <div style={{
+              fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: '#5a6068',
+              textTransform: 'uppercase', marginBottom: 4,
+              marginTop: gi === 0 ? 0 : 10,
+            }}>{group.projectName}</div>
+            {group.tasks.map(function(task) {
+              return (
+                <div key={task.id}
+                  onClick={function() { onOpenTask && onOpenTask(task, group.proj); }}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '5px 0', cursor: 'pointer',
+                  }}
+                  onMouseEnter={function(e) { e.currentTarget.style.opacity = '0.75'; }}
+                  onMouseLeave={function(e) { e.currentTarget.style.opacity = '1'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+                    <span style={{ color: '#fff', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                  </div>
+                  <span style={{ color: '#ef4444', fontSize: 10, flexShrink: 0, marginLeft: 8 }}>{fmtDate(task.due)}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DashboardView({ workspace, theme, onOpenTask, onNewProject, overdueMap }) {
   const allProjects = workspace.areas.flatMap(a => a.projects.map(p => ({ ...p, areaName: a.name })));
   const allTasks = allProjects.flatMap(p => p.tasks);
 
@@ -299,6 +379,18 @@ function DashboardView({ workspace, theme, onOpenTask, onNewProject }) {
             ))}
           </div>
         </div>
+
+        {/* 8. Overdue — full width row 4, only if tasks have due dates */}
+        {allTasks.some(function(t) { return t.due; }) && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <OverdueCard
+              workspaces={[workspace]}
+              overdueMap={overdueMap}
+              onOpenTask={onOpenTask}
+              theme={theme}
+            />
+          </div>
+        )}
 
       </div>
     </div>
