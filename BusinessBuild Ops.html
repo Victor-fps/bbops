@@ -263,6 +263,8 @@ function App() {
   const [showNewProject, setShowNewProject] = React.useState(false);
   const [editingProject, setEditingProject] = React.useState(null);
 
+  const searchBtnRef = React.useRef(null);
+
   // Toast state
   const [toast, setToast] = React.useState(null);
   const toastTimerRef = React.useRef(null);
@@ -448,6 +450,7 @@ function App() {
             {viewLabels[activeView]}
           </span>
           <button
+            ref={searchBtnRef}
             onClick={() => setSearchOpen(prev => !prev)}
             title="Search tasks and projects"
             style={{
@@ -481,6 +484,7 @@ function App() {
               onClose={() => setSearchOpen(false)}
               onOpenTask={handleOpenTask}
               onSwitchWorkspace={function(id) { handleSwitchWs(id); }}
+              searchBtnRef={searchBtnRef}
             />
           )}
         </div>

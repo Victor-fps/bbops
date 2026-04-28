@@ -823,7 +823,7 @@ function notesSnippet(notes, query) {
   return snippet;
 }
 
-function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace }) {
+function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace, searchBtnRef }) {
   const [query, setQuery] = React.useState('');
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
@@ -839,6 +839,7 @@ function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace }) {
       if (e.key === 'Escape') onClose();
     }
     function handleMouseDown(e) {
+      if (searchBtnRef && searchBtnRef.current && searchBtnRef.current.contains(e.target)) return;
       if (panelRef.current && !panelRef.current.contains(e.target)) {
         onClose();
       }
