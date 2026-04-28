@@ -90,7 +90,7 @@ function VelocitySparkline() {
 }
 
 // ── OVERDUE CARD ─────────────────────────────────────────────────────────────
-function OverdueCard({ workspaces, overdueMap, onOpenTask, theme }) {
+function OverdueCard({ workspaces, onOpenTask, theme }) {
   var today = new Date().toISOString().slice(0, 10);
 
   // Collect all overdue tasks grouped by project, across all workspaces
@@ -380,17 +380,14 @@ function DashboardView({ workspace, theme, onOpenTask, onNewProject, overdueMap 
           </div>
         </div>
 
-        {/* 8. Overdue — full width row 4, only if tasks have due dates */}
-        {allTasks.some(function(t) { return t.due; }) && (
-          <div style={{ gridColumn: '1 / -1' }}>
-            <OverdueCard
-              workspaces={[workspace]}
-              overdueMap={overdueMap}
-              onOpenTask={onOpenTask}
-              theme={theme}
-            />
-          </div>
-        )}
+        {/* 8. Overdue — full width row 4 */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <OverdueCard
+            workspaces={[workspace]}
+            onOpenTask={onOpenTask}
+            theme={theme}
+          />
+        </div>
 
       </div>
     </div>

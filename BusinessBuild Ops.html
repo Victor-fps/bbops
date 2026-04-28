@@ -290,18 +290,20 @@ function App() {
   }, [workspace, showArchived]);
 
   const overdueMap = React.useMemo(function() {
+    var today = new Date().toISOString().slice(0, 10);
     var map = {};
-    var todayStr = new Date().toDateString();
-    workspace.areas.forEach(function(area) {
-      area.projects.forEach(function(proj) {
-        var count = proj.tasks.filter(function(t) {
-          return t.status !== 'done' && t.due && new Date(t.due + 'T00:00:00') < new Date(todayStr);
-        }).length;
-        if (count > 0) map[proj.id] = count;
+    workspaces.forEach(function(ws) {
+      (ws.areas || []).forEach(function(area) {
+        (area.projects || []).forEach(function(proj) {
+          var count = (proj.tasks || []).filter(function(t) {
+            return t.due && t.due < today && t.status !== 'done';
+          }).length;
+          if (count > 0) map[proj.id] = count;
+        });
       });
     });
     return map;
-  }, [workspace]);
+  }, [workspaces]);
 
   const findProjectArea = (projId) => {
     for (const ws of workspaces) {
