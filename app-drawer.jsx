@@ -238,6 +238,7 @@ function ProjectModal({ theme, areas, existingProj, onSave, onClose }) {
       onClose={onClose}
       onSave={() => {
         if (!form.name.trim()) return;
+        if (!existingProj && !form.areaId) return;
         if (existingProj) {
           onSave({ name: form.name.trim(), status: form.status, startDate: form.startDate, endDate: form.endDate });
         } else {
@@ -252,9 +253,12 @@ function ProjectModal({ theme, areas, existingProj, onSave, onClose }) {
       </DrawerField>
       {!existingProj && (
         <DrawerField label="Area" theme={theme}>
-          <select value={form.areaId} onChange={e => set('areaId', e.target.value)} style={drawerInputStyle()}>
-            {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          {areas.length === 0
+            ? <div style={{ fontSize: 11, color: '#ef4444', padding: '8px 0' }}>No areas yet — create an area in the sidebar first.</div>
+            : <select value={form.areaId} onChange={e => set('areaId', e.target.value)} style={drawerInputStyle()}>
+                {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+          }
         </DrawerField>
       )}
       <DrawerField label="Status" theme={theme}>
