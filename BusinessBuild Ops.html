@@ -327,6 +327,19 @@ function App() {
     setDrawerArea(area);
   };
 
+  const handleSearchOpenTask = function(task, proj, ws) {
+    // Look up area in the target workspace (not current active workspace)
+    var foundArea = null;
+    (ws.areas || []).forEach(function(area) {
+      if ((area.projects || []).find(function(p) { return p.id === proj.id; })) {
+        foundArea = area;
+      }
+    });
+    setDrawerTask(task);
+    setDrawerProject(proj);
+    setDrawerArea(foundArea);
+  };
+
   const handleUpdateTask = (updatedTask) => {
     if (!drawerProject) return;
     setWorkspaces(prev => updateTaskInWs(prev, wsId, drawerProject.id, updatedTask));
@@ -482,8 +495,8 @@ function App() {
             <SearchPanel
               workspaces={workspaces}
               onClose={() => setSearchOpen(false)}
-              onOpenTask={handleOpenTask}
-              onSwitchWorkspace={function(id) { handleSwitchWs(id); }}
+              onOpenTask={handleSearchOpenTask}
+              onSwitchWorkspace={handleSwitchWs}
               searchBtnRef={searchBtnRef}
             />
           )}

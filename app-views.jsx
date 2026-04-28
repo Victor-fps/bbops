@@ -813,6 +813,7 @@ function searchWorkspaces(workspaces, query) {
 }
 
 function notesSnippet(notes, query) {
+  if (!notes) return '';
   var idx = notes.toLowerCase().indexOf(query.toLowerCase());
   if (idx < 0) return notes.slice(0, 60);
   var start = Math.max(0, idx - 20);
@@ -850,7 +851,7 @@ function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace, searc
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('mousedown', handleMouseDown);
     };
-  }, [onClose]);
+  }, []); // onClose calls setSearchOpen which is stable
 
   var results = searchWorkspaces(workspaces, query);
 
@@ -888,7 +889,7 @@ function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace, searc
           width: '100%', background: 'rgba(255,255,255,0.04)',
           border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
           padding: '8px 12px', color: '#fff', fontSize: 13,
-          outline: 'none', fontFamily: 'inherit',
+          outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
         }}
         onFocus={function(e) { e.target.style.borderColor = 'rgba(255,255,255,0.18)'; }}
         onBlur={function(e) { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; }}
@@ -906,7 +907,7 @@ function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace, searc
             <div style={{
               fontSize: 9, fontWeight: 600, color: '#4a5058',
               textTransform: 'uppercase', letterSpacing: '0.18em',
-              marginTop: wi === 0 ? 16 : 16, marginBottom: 4,
+              marginTop: wi === 0 ? 0 : 20, marginBottom: 4,
             }}>{wsGroup.ws.name}</div>
             {wsGroup.projects.map(function(projGroup) {
               return (
@@ -921,7 +922,7 @@ function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace, searc
                         key={r.task.id}
                         onClick={function() {
                           onSwitchWorkspace && onSwitchWorkspace(r.ws.id);
-                          onOpenTask && onOpenTask(r.task, r.proj);
+                          onOpenTask && onOpenTask(r.task, r.proj, r.ws);
                           onClose();
                         }}
                         style={{
@@ -933,7 +934,7 @@ function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace, searc
                         <div style={{ color: '#fff', fontSize: 11 }}>{r.task.title}</div>
                         {r.matchedOn === 'notes' && r.task.notes && (
                           <div style={{ color: '#5a6068', fontSize: 10, marginTop: 2 }}>
-                            {notesSnippet(r.task.notes, query)}
+                            {notesSnippet(r.task.notes, query.trim())}
                           </div>
                         )}
                       </div>
