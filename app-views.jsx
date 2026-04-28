@@ -416,10 +416,20 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
   const proj = allProjects.find(p => p.id === activeProjectId) || allProjects[0];
   const [dragOver, setDragOver] = React.useState(null);
   const [dragOverTaskId, setDragOverTaskId] = React.useState(null);
+  const [dragSourceStatus, setDragSourceStatus] = React.useState(null);
   const [addingTo, setAddingTo] = React.useState(null); // column id
 
   const move = (taskId, toStatus) => onMoveTask && onMoveTask(proj.id, taskId, toStatus);
   const reorder = (taskId, targetTaskId) => onReorderTask && onReorderTask(proj.id, taskId, targetTaskId);
+
+  const handleCardDragStart = function(sourceStatus) {
+    setDragSourceStatus(sourceStatus);
+  };
+
+  const handleCardDragEnd = function() {
+    setDragSourceStatus(null);
+    setDragOverTaskId(null);
+  };
 
   return (
     <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -464,6 +474,7 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
                 if (taskId && fromStatus !== colId) move(taskId, colId);
                 setDragOver(null);
                 setDragOverTaskId(null);
+                setDragSourceStatus(null);
               }}
               style={{
                 display: 'flex', flexDirection: 'column',
@@ -492,8 +503,15 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
                     onMove={move}
                     onReorder={reorder}
                     isDragOver={dragOverTaskId === t.id}
-                    onDragOverTask={id => { setDragOverTaskId(id); setDragOver(null); }}
-                    onDragLeaveTask={() => setDragOverTaskId(null)} />
+                    onDragOverTask={function(id) {
+                      if (dragSourceStatus === colId) {
+                        setDragOverTaskId(id);
+                        setDragOver(null);
+                      }
+                    }}
+                    onDragLeaveTask={() => setDragOverTaskId(null)}
+                    onDragStart={handleCardDragStart}
+                    onDragEnd={handleCardDragEnd} />
                 ))}
                 {tasks.length === 0 && !isOver && (
                   <div style={{ border: `1.5px dashed ${theme.border}`, borderRadius: 10, height: 72,
@@ -517,7 +535,7 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
   );
 }
 
-function KanbanCard({ task, colId, theme, onOpen, onMove, onReorder, isDragOver, onDragOverTask, onDragLeaveTask }) {
+function KanbanCard({ task, colId, theme, onOpen, onMove, onReorder, isDragOver, onDragOverTask, onDragLeaveTask, onDragStart, onDragEnd }) {
   const colIdx = COL_ORDER.indexOf(colId);
   const overdue = isOverdue(task.due) && task.status !== 'done';
 
@@ -532,7 +550,9 @@ function KanbanCard({ task, colId, theme, onOpen, onMove, onReorder, isDragOver,
         onDragStart={e => {
           e.dataTransfer.setData('taskId', task.id);
           e.dataTransfer.setData('taskStatus', task.status);
+          onDragStart && onDragStart(task.status);
         }}
+        onDragEnd={onDragEnd}
         onDragOver={e => {
           e.preventDefault();
           e.stopPropagation();
