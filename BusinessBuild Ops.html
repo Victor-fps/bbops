@@ -424,6 +424,7 @@ function App() {
         onRenameArea={handleRenameArea}
         onDeleteArea={handleDeleteArea}
         onEditProject={(proj) => setEditingProject(proj)}
+        onArchiveProject={(projId, status) => handleUpdateProject(projId, { status })}
         onDeleteProject={handleDeleteProject}
         showArchived={showArchived}
         onToggleArchived={() => setShowArchived(prev => !prev)}
@@ -485,11 +486,20 @@ function App() {
 
       {/* New Project Modal */}
       {showNewProject && (
-        <NewProjectModal
+        <ProjectModal
           theme={theme}
           areas={workspace.areas}
           onSave={handleAddProject}
           onClose={() => setShowNewProject(false)}
+        />
+      )}
+      {editingProject && (
+        <ProjectModal
+          theme={theme}
+          areas={workspace.areas}
+          existingProj={editingProject}
+          onSave={(updates) => handleUpdateProject(editingProject.id, updates)}
+          onClose={() => setEditingProject(null)}
         />
       )}
 

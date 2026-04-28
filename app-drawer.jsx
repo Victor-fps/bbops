@@ -222,25 +222,46 @@ function NewTaskModal({ theme, defaultStatus, onSave, onClose }) {
   );
 }
 
-// ── New Project Modal ─────────────────────────────────────────────────────────
-function NewProjectModal({ theme, areas, onSave, onClose }) {
-  const [form, setForm] = React.useState({ name: '', areaId: areas[0]?.id || '', startDate: '', endDate: '' });
+// ── Project Modal (create + edit) ─────────────────────────────────────────────
+function ProjectModal({ theme, areas, existingProj, onSave, onClose }) {
+  const [form, setForm] = React.useState(
+    existingProj
+      ? { name: existingProj.name, areaId: '', status: existingProj.status || 'active', startDate: existingProj.startDate || '', endDate: existingProj.endDate || '' }
+      : { name: '', areaId: areas[0]?.id || '', status: 'planned', startDate: '', endDate: '' }
+  );
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
   return (
-    <ModalShell title="New Project" theme={theme} onClose={onClose} onSave={() => {
-      if (!form.name.trim()) return;
-      onSave({ ...form, id: 'proj-' + Date.now(), status: 'planned', progress: 0, tasks: [] });
-      onClose();
-    }}>
+    <ModalShell
+      title={existingProj ? 'Edit Project' : 'New Project'}
+      theme={theme}
+      onClose={onClose}
+      onSave={() => {
+        if (!form.name.trim()) return;
+        if (existingProj) {
+          onSave({ name: form.name.trim(), status: form.status, startDate: form.startDate, endDate: form.endDate });
+        } else {
+          onSave({ ...form, id: 'proj-' + Date.now(), progress: 0, tasks: [] });
+        }
+        onClose();
+      }}
+    >
       <DrawerField label="Project Name" theme={theme}>
         <input autoFocus value={form.name} onChange={e => set('name', e.target.value)}
-          placeholder="What are you building?"
-          style={drawerInputStyle()} />
+          placeholder="What are you building?" style={drawerInputStyle()} />
       </DrawerField>
-      <DrawerField label="Area" theme={theme}>
-        <select value={form.areaId} onChange={e => set('areaId', e.target.value)} style={drawerInputStyle()}>
-          {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+      {!existingProj && (
+        <DrawerField label="Area" theme={theme}>
+          <select value={form.areaId} onChange={e => set('areaId', e.target.value)} style={drawerInputStyle()}>
+            {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </DrawerField>
+      )}
+      <DrawerField label="Status" theme={theme}>
+        <select value={form.status} onChange={e => set('status', e.target.value)} style={drawerInputStyle()}>
+          <option value="active">Active</option>
+          <option value="planned">Planned</option>
+          <option value="archived">Archived</option>
         </select>
       </DrawerField>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
@@ -283,4 +304,62 @@ function ModalShell({ title, theme, onClose, onSave, children }) {
   );
 }
 
-Object.assign(window, { TaskDrawer, NewTaskModal, NewProjectModal });
+// Preset colors for new workspaces
+const WS_COLORS = ['#d4a017','#6366f1','#ec4899','#10b981','#f97316','#3b82f6','#a855f7','#14b8a6'];
+
+function autoAbbr(name) {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function WorkspaceModal({ theme, workspaces, existingWs, onSave, onClose }) {
+  const nextColor = WS_COLORS[workspaces.length % WS_COLORS.length];
+  const [form, setForm] = React.useState(
+    existingWs
+      ? { name: existingWs.name, abbr: existingWs.abbr, color: existingWs.color }
+      : { name: '', abbr: '', color: nextColor }
+  );
+  const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const handleNameChange = (v) => {
+    set('name', v);
+    if (!existingWs) set('abbr', autoAbbr(v));
+  };
+
+  return (
+    <ModalShell
+      title={existingWs ? 'Rename Workspace' : 'New Workspace'}
+      theme={theme}
+      onClose={onClose}
+      onSave={() => {
+        if (!form.name.trim()) return;
+        onSave({ name: form.name.trim(), abbr: (form.abbr.trim().slice(0,2) || autoAbbr(form.name)).toUpperCase(), color: form.color });
+        onClose();
+      }}
+    >
+      <DrawerField label="Workspace Name" theme={theme}>
+        <input autoFocus value={form.name} onChange={e => handleNameChange(e.target.value)}
+          placeholder="e.g. Flores RE Wholesale" style={drawerInputStyle()} />
+      </DrawerField>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+        <DrawerFieldInline label="Abbreviation (2 chars)" theme={theme}>
+          <input value={form.abbr} maxLength={2} onChange={e => set('abbr', e.target.value.toUpperCase())}
+            placeholder="FW" style={drawerInputStyle()} />
+        </DrawerFieldInline>
+        <DrawerFieldInline label="Color" theme={theme}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', paddingTop: 4 }}>
+            {WS_COLORS.map(c => (
+              <div key={c} onClick={() => set('color', c)} style={{
+                width: 20, height: 20, borderRadius: 5, background: c, cursor: 'pointer',
+                border: form.color === c ? '2px solid #fff' : '2px solid transparent',
+              }} />
+            ))}
+          </div>
+        </DrawerFieldInline>
+      </div>
+    </ModalShell>
+  );
+}
+
+Object.assign(window, { TaskDrawer, NewTaskModal, ProjectModal, WorkspaceModal });
