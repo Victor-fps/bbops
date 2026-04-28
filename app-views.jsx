@@ -90,27 +90,33 @@ function VelocitySparkline() {
 }
 
 // ── OVERDUE CARD ─────────────────────────────────────────────────────────────
-function OverdueCard({ workspaces, onOpenTask, theme }) {
+function OverdueCard({ workspaces, onOpenTask }) {
   var today = new Date().toISOString().slice(0, 10);
+
+  // Check if any task has a due date at all
+  var anyDue = (workspaces || []).some(function(ws) {
+    return (ws.areas || []).some(function(area) {
+      return (area.projects || []).some(function(proj) {
+        return (proj.tasks || []).some(function(t) { return !!t.due; });
+      });
+    });
+  });
 
   // Collect all overdue tasks grouped by project, across all workspaces
   var groups = [];
-  var anyDue = false;
   (workspaces || []).forEach(function(ws) {
     (ws.areas || []).forEach(function(area) {
       (area.projects || []).forEach(function(proj) {
         var overdueTasks = (proj.tasks || []).filter(function(t) {
-          if (t.due) anyDue = true;
           return t.due && t.due < today && t.status !== 'done';
         });
         if (overdueTasks.length > 0) {
-          groups.push({ projectName: proj.name, areaName: area.name, proj: proj, tasks: overdueTasks });
+          groups.push({ projectName: proj.name, proj: proj, tasks: overdueTasks });
         }
       });
     });
   });
 
-  // Check if any task has a due date at all
   if (!anyDue) return null;
 
   var card = {
@@ -169,7 +175,7 @@ function OverdueCard({ workspaces, onOpenTask, theme }) {
   );
 }
 
-function DashboardView({ workspace, theme, onOpenTask, onNewProject, overdueMap }) {
+function DashboardView({ workspace, theme, onOpenTask, onNewProject }) {
   const allProjects = workspace.areas.flatMap(a => a.projects.map(p => ({ ...p, areaName: a.name })));
   const allTasks = allProjects.flatMap(p => p.tasks);
 
@@ -385,7 +391,6 @@ function DashboardView({ workspace, theme, onOpenTask, onNewProject, overdueMap 
           <OverdueCard
             workspaces={[workspace]}
             onOpenTask={onOpenTask}
-            theme={theme}
           />
         </div>
 
