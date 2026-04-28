@@ -24,6 +24,7 @@ function StatusPill({ status }) {
     'todo':        { label: 'To Do',       bg: 'rgba(255,255,255,0.05)', color: '#5a6068' },
     'active':      { label: 'Active',      bg: 'rgba(0,229,212,0.12)',   color: '#00e5d4' },
     'planned':     { label: 'Planned',     bg: 'rgba(255,255,255,0.05)', color: '#5a6068' },
+    'archived':    { label: 'Archived',    bg: 'rgba(90,96,104,0.15)',   color: '#5a6068' },
   };
   const c = cfg[status] || cfg.todo;
   return (
