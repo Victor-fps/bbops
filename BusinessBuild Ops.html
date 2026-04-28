@@ -262,7 +262,12 @@ function App() {
 
   // Toast state
   const [toast, setToast] = React.useState(null);
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const toastTimerRef = React.useRef(null);
+  const showToast = (msg) => {
+    clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  };
   const handleExport = () => BBStorage.exportJSON(workspaces);
   const handleImport = () => BBStorage.importJSON(
     function(imported) { setWorkspaces(imported); setWsId(imported[0].id); showToast('Data imported — ' + imported.length + ' workspace(s) loaded'); },
@@ -341,18 +346,13 @@ function App() {
   const handleAddWorkspace = (ws) => setWorkspaces(prev => addWorkspaceInWs(prev, ws));
   const handleRenameWorkspace = (targetWsId, updates) => setWorkspaces(prev => updateWorkspaceInWs(prev, targetWsId, updates));
   const handleDeleteWorkspace = (targetWsId) => {
-    let nextId = null;
-    setWorkspaces(prev => {
-      const next = deleteWorkspaceInWs(prev, targetWsId);
-      if (next.length === 0) return prev;
-      nextId = (next.find(w => w.id !== targetWsId) || next[0]).id;
-      return next;
-    });
-    if (nextId) {
-      setWsId(nextId);
-      setSelectedProject(null);
-      setDrawerTask(null);
-    }
+    const remaining = workspaces.filter(function(w) { return w.id !== targetWsId; });
+    if (remaining.length === 0) return;
+    const nextId = wsId === targetWsId ? remaining[0].id : wsId;
+    setWorkspaces(deleteWorkspaceInWs(workspaces, targetWsId));
+    setWsId(nextId);
+    setSelectedProject(null);
+    setDrawerTask(null);
   };
   const handleResetData = () => {
     BBStorage.clear();
