@@ -429,6 +429,7 @@ function KanbanView({ workspace, selectedProject, theme, onOpenTask, onMoveTask,
   const handleCardDragEnd = function() {
     setDragSourceStatus(null);
     setDragOverTaskId(null);
+    setDragOver(null);
   };
 
   return (
@@ -558,9 +559,11 @@ function KanbanCard({ task, colId, theme, onOpen, onMove, onReorder, isDragOver,
           e.stopPropagation();
           onDragOverTask && onDragOverTask(task.id);
         }}
-        onDragLeave={e => {
+        onDragLeave={function(e) {
           e.stopPropagation();
-          onDragLeaveTask && onDragLeaveTask();
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            onDragLeaveTask && onDragLeaveTask();
+          }
         }}
         onDrop={e => {
           e.preventDefault();
