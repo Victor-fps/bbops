@@ -787,4 +787,165 @@ function RoadmapView({ workspace, theme }) {
   );
 }
 
-Object.assign(window, { DashboardView, KanbanView, CalendarView, RoadmapView });
+// ── SEARCH PANEL ─────────────────────────────────────────────────────────────
+function searchWorkspaces(workspaces, query) {
+  var q = query.toLowerCase().trim();
+  if (!q) return [];
+  var results = [];
+  workspaces.forEach(function(ws) {
+    (ws.areas || []).forEach(function(area) {
+      (area.projects || []).forEach(function(proj) {
+        var projMatches = proj.name.toLowerCase().includes(q);
+        (proj.tasks || []).forEach(function(task) {
+          var titleMatch = task.title && task.title.toLowerCase().includes(q);
+          var notesMatch = task.notes && task.notes.toLowerCase().includes(q);
+          if (titleMatch || notesMatch || projMatches) {
+            results.push({
+              ws: ws, proj: proj, task: task,
+              matchedOn: notesMatch && !titleMatch ? 'notes' : 'title'
+            });
+          }
+        });
+      });
+    });
+  });
+  return results;
+}
+
+function notesSnippet(notes, query) {
+  var idx = notes.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return notes.slice(0, 60);
+  var start = Math.max(0, idx - 20);
+  var end = Math.min(notes.length, idx + query.length + 40);
+  var snippet = notes.slice(start, end);
+  if (start > 0) snippet = '…' + snippet;
+  if (end < notes.length) snippet = snippet + '…';
+  return snippet;
+}
+
+function SearchPanel({ workspaces, onClose, onOpenTask, onSwitchWorkspace }) {
+  const [query, setQuery] = React.useState('');
+  const inputRef = React.useRef(null);
+  const panelRef = React.useRef(null);
+
+  // Auto-focus on mount
+  React.useEffect(function() {
+    if (inputRef.current) inputRef.current.focus();
+  }, []);
+
+  // Close on Escape or click outside
+  React.useEffect(function() {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    function handleMouseDown(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        onClose();
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleMouseDown);
+    return function() {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [onClose]);
+
+  var results = searchWorkspaces(workspaces, query);
+
+  // Group results by workspace then by project
+  var grouped = [];
+  results.forEach(function(r) {
+    var wsGroup = grouped.find(function(g) { return g.ws.id === r.ws.id; });
+    if (!wsGroup) {
+      wsGroup = { ws: r.ws, projects: [] };
+      grouped.push(wsGroup);
+    }
+    var projGroup = wsGroup.projects.find(function(pg) { return pg.proj.id === r.proj.id; });
+    if (!projGroup) {
+      projGroup = { proj: r.proj, tasks: [] };
+      wsGroup.projects.push(projGroup);
+    }
+    projGroup.tasks.push(r);
+  });
+
+  return (
+    <div ref={panelRef} style={{
+      position: 'absolute', top: '100%', left: 0, right: 0,
+      background: '#0d0f15',
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+      padding: '16px 24px',
+      maxHeight: 420, overflowY: 'auto',
+      zIndex: 100,
+    }}>
+      <input
+        ref={inputRef}
+        value={query}
+        onChange={function(e) { setQuery(e.target.value); }}
+        placeholder="Search tasks and projects…"
+        style={{
+          width: '100%', background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
+          padding: '8px 12px', color: '#fff', fontSize: 13,
+          outline: 'none', fontFamily: 'inherit',
+        }}
+        onFocus={function(e) { e.target.style.borderColor = 'rgba(255,255,255,0.18)'; }}
+        onBlur={function(e) { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+      />
+
+      {query.trim() && results.length === 0 && (
+        <div style={{ color: '#5a6068', fontSize: 12, padding: '16px 0' }}>
+          No results for &ldquo;{query}&rdquo;
+        </div>
+      )}
+
+      {grouped.map(function(wsGroup, wi) {
+        return (
+          <div key={wsGroup.ws.id}>
+            <div style={{
+              fontSize: 9, fontWeight: 600, color: '#4a5058',
+              textTransform: 'uppercase', letterSpacing: '0.18em',
+              marginTop: wi === 0 ? 16 : 16, marginBottom: 4,
+            }}>{wsGroup.ws.name}</div>
+            {wsGroup.projects.map(function(projGroup) {
+              return (
+                <div key={projGroup.proj.id}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 600, color: '#aab0b8',
+                    marginTop: 8, marginBottom: 2,
+                  }}>{projGroup.proj.name}</div>
+                  {projGroup.tasks.map(function(r) {
+                    return (
+                      <div
+                        key={r.task.id}
+                        onClick={function() {
+                          onSwitchWorkspace && onSwitchWorkspace(r.ws.id);
+                          onOpenTask && onOpenTask(r.task, r.proj);
+                          onClose();
+                        }}
+                        style={{
+                          padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                        }}
+                        onMouseEnter={function(e) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                        onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <div style={{ color: '#fff', fontSize: 11 }}>{r.task.title}</div>
+                        {r.matchedOn === 'notes' && r.task.notes && (
+                          <div style={{ color: '#5a6068', fontSize: 10, marginTop: 2 }}>
+                            {notesSnippet(r.task.notes, query)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+Object.assign(window, { DashboardView, KanbanView, CalendarView, RoadmapView, SearchPanel });
