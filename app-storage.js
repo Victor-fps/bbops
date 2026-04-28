@@ -74,6 +74,9 @@
       reader.readAsText(file);
     };
     document.body.appendChild(input);
+    input.addEventListener('cancel', function() {
+      if (input.parentNode) document.body.removeChild(input);
+    });
     input.click();
   }
 

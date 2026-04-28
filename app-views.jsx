@@ -625,7 +625,7 @@ function arrowBtnStyle(theme) {
 
 // ── CALENDAR ─────────────────────────────────────────────────────────────────
 function CalendarView({ workspace, theme, onOpenTask }) {
-  const [month, setMonth] = React.useState(new Date(2026, 3, 1));
+  const [month, setMonth] = React.useState(new Date());
   const allProjects = workspace.areas.flatMap(a => a.projects);
   const allTasks = allProjects.flatMap(p => p.tasks.filter(t => t.due));
 

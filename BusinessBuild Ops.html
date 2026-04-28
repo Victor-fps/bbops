@@ -258,6 +258,7 @@ function App() {
   const [drawerTask, setDrawerTask] = React.useState(null);
   const [drawerProject, setDrawerProject] = React.useState(null);
   const [drawerArea, setDrawerArea] = React.useState(null);
+  const [drawerWsId, setDrawerWsId] = React.useState(null);
 
   // New project modal
   const [showNewProject, setShowNewProject] = React.useState(false);
@@ -280,6 +281,12 @@ function App() {
   );
 
   React.useEffect(function() { BBStorage.save(workspaces); }, [workspaces]);
+
+  React.useEffect(function() {
+    if (workspaces.length > 0 && !workspaces.find(function(w) { return w.id === wsId; })) {
+      setWsId(workspaces[0].id);
+    }
+  }, [workspaces, wsId]);
 
   const workspace = workspaces.find(w => w.id === wsId) || workspaces[0];
 
@@ -325,6 +332,7 @@ function App() {
     setDrawerTask(task);
     setDrawerProject(project);
     setDrawerArea(area);
+    setDrawerWsId(wsId);
   };
 
   const handleSearchOpenTask = function(task, proj, ws) {
@@ -338,17 +346,18 @@ function App() {
     setDrawerTask(task);
     setDrawerProject(proj);
     setDrawerArea(foundArea);
+    setDrawerWsId(ws.id);
   };
 
   const handleUpdateTask = (updatedTask) => {
     if (!drawerProject) return;
-    setWorkspaces(prev => updateTaskInWs(prev, wsId, drawerProject.id, updatedTask));
+    setWorkspaces(prev => updateTaskInWs(prev, drawerWsId || wsId, drawerProject.id, updatedTask));
     setDrawerTask(updatedTask);
   };
 
   const handleDeleteTask = (taskId) => {
     if (!drawerProject) return;
-    setWorkspaces(prev => deleteTaskInWs(prev, wsId, drawerProject.id, taskId));
+    setWorkspaces(prev => deleteTaskInWs(prev, drawerWsId || wsId, drawerProject.id, taskId));
   };
 
   const handleMoveTask = (projId, taskId, newStatus) => {
@@ -373,6 +382,7 @@ function App() {
     setWsId(nextId);
     setSelectedProject(null);
     setDrawerTask(null);
+    setDrawerWsId(null);
   };
   const handleResetData = () => {
     BBStorage.clear();
@@ -381,6 +391,7 @@ function App() {
     setWsId(fresh[0].id);
     setSelectedProject(null);
     setDrawerTask(null);
+    setDrawerWsId(null);
   };
   const handleAddArea = (targetWsId, area) => setWorkspaces(prev => addAreaInWs(prev, targetWsId, area));
   const handleRenameArea = (targetWsId, areaId, name) => setWorkspaces(prev => updateAreaInWs(prev, targetWsId, areaId, { name }));
@@ -526,7 +537,7 @@ function App() {
           project={drawerProject}
           area={drawerArea}
           theme={theme}
-          onClose={() => setDrawerTask(null)}
+          onClose={() => { setDrawerTask(null); setDrawerWsId(null); }}
           onUpdate={handleUpdateTask}
           onDelete={handleDeleteTask}
         />
