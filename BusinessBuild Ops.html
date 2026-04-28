@@ -23,6 +23,7 @@
 <body>
 <div id="root"></div>
 
+<script src="app-storage.js"></script>
 <script src="app-data.js"></script>
 <script type="text/babel" src="app-sidebar.jsx"></script>
 <script type="text/babel" src="app-views.jsx"></script>
@@ -143,6 +144,75 @@ function addProjectInWs(workspaces, wsId, areaId, project) {
   });
 }
 
+// Workspace helpers
+function addWorkspaceInWs(workspaces, workspace) {
+  return [...workspaces, workspace];
+}
+function updateWorkspaceInWs(workspaces, wsId, updates) {
+  return workspaces.map(function(ws) { return ws.id === wsId ? Object.assign({}, ws, updates) : ws; });
+}
+function deleteWorkspaceInWs(workspaces, wsId) {
+  return workspaces.filter(function(ws) { return ws.id !== wsId; });
+}
+
+// Area helpers
+function addAreaInWs(workspaces, wsId, area) {
+  return workspaces.map(function(ws) {
+    if (ws.id !== wsId) return ws;
+    return Object.assign({}, ws, { areas: [...ws.areas, area] });
+  });
+}
+function updateAreaInWs(workspaces, wsId, areaId, updates) {
+  return workspaces.map(function(ws) {
+    if (ws.id !== wsId) return ws;
+    return Object.assign({}, ws, { areas: ws.areas.map(function(a) { return a.id === areaId ? Object.assign({}, a, updates) : a; }) });
+  });
+}
+function deleteAreaInWs(workspaces, wsId, areaId) {
+  return workspaces.map(function(ws) {
+    if (ws.id !== wsId) return ws;
+    return Object.assign({}, ws, { areas: ws.areas.filter(function(a) { return a.id !== areaId; }) });
+  });
+}
+
+// Project helpers
+function updateProjectInWs(workspaces, wsId, projId, updates) {
+  return workspaces.map(function(ws) {
+    if (ws.id !== wsId) return ws;
+    return Object.assign({}, ws, { areas: ws.areas.map(function(area) {
+      return Object.assign({}, area, { projects: area.projects.map(function(proj) {
+        return proj.id === projId ? Object.assign({}, proj, updates) : proj;
+      })});
+    })});
+  });
+}
+function deleteProjectInWs(workspaces, wsId, projId) {
+  return workspaces.map(function(ws) {
+    if (ws.id !== wsId) return ws;
+    return Object.assign({}, ws, { areas: ws.areas.map(function(area) {
+      return Object.assign({}, area, { projects: area.projects.filter(function(proj) { return proj.id !== projId; }) });
+    })});
+  });
+}
+
+// Reorder tasks within a column
+function reorderTaskInWs(workspaces, wsId, projId, taskId, targetIndex) {
+  return workspaces.map(function(ws) {
+    if (ws.id !== wsId) return ws;
+    return Object.assign({}, ws, { areas: ws.areas.map(function(area) {
+      return Object.assign({}, area, { projects: area.projects.map(function(proj) {
+        if (proj.id !== projId) return proj;
+        var tasks = proj.tasks.slice();
+        var fromIndex = tasks.findIndex(function(t) { return t.id === taskId; });
+        if (fromIndex === -1) return proj;
+        var task = tasks.splice(fromIndex, 1)[0];
+        tasks.splice(targetIndex, 0, task);
+        return Object.assign({}, proj, { tasks: tasks });
+      })});
+    })});
+  });
+}
+
 // ── NavTabs component (isolated so active prop reliably triggers re-render) ──
 function NavTabs({ activeView, onSetView, theme }) {
   const views = ['dashboard', 'kanban', 'calendar', 'roadmap'];
@@ -175,10 +245,9 @@ function NavTabs({ activeView, onSetView, theme }) {
 function App() {
   const theme = NOIR;
 
-  const [workspaces, setWorkspaces] = React.useState(() =>
-    JSON.parse(JSON.stringify(window.APP_DATA.WORKSPACES))
-  );
-  const [wsId, setWsId] = React.useState('wholesale');
+  const [workspaces, setWorkspaces] = React.useState(() => BBStorage.load());
+  const [showArchived, setShowArchived] = React.useState(false);
+  const [wsId, setWsId] = React.useState(() => BBStorage.load()[0].id);
   const [activeView, setActiveView] = React.useState('dashboard');
   const [selectedProject, setSelectedProject] = React.useState(null);
 
@@ -189,8 +258,36 @@ function App() {
 
   // New project modal
   const [showNewProject, setShowNewProject] = React.useState(false);
+  const [editingProject, setEditingProject] = React.useState(null);
+
+  React.useEffect(function() { BBStorage.save(workspaces); }, [workspaces]);
 
   const workspace = workspaces.find(w => w.id === wsId) || workspaces[0];
+
+  const visibleWorkspace = React.useMemo(function() {
+    if (showArchived) return workspace;
+    return Object.assign({}, workspace, {
+      areas: workspace.areas.map(function(area) {
+        return Object.assign({}, area, {
+          projects: area.projects.filter(function(p) { return p.status !== 'archived'; }),
+        });
+      }),
+    });
+  }, [workspace, showArchived]);
+
+  const overdueMap = React.useMemo(function() {
+    var map = {};
+    var todayStr = new Date().toDateString();
+    workspace.areas.forEach(function(area) {
+      area.projects.forEach(function(proj) {
+        var count = proj.tasks.filter(function(t) {
+          return t.status !== 'done' && t.due && new Date(t.due + 'T00:00:00') < new Date(todayStr);
+        }).length;
+        if (count > 0) map[proj.id] = count;
+      });
+    });
+    return map;
+  }, [workspace]);
 
   const findProjectArea = (projId) => {
     for (const ws of workspaces) {
@@ -230,6 +327,38 @@ function App() {
 
   const handleAddProject = (project) => {
     setWorkspaces(prev => addProjectInWs(prev, wsId, project.areaId, project));
+  };
+
+  const handleAddWorkspace = (ws) => setWorkspaces(prev => addWorkspaceInWs(prev, ws));
+  const handleRenameWorkspace = (wsId, updates) => setWorkspaces(prev => updateWorkspaceInWs(prev, wsId, updates));
+  const handleDeleteWorkspace = (wsId) => {
+    setWorkspaces(prev => {
+      const next = deleteWorkspaceInWs(prev, wsId);
+      if (next.length === 0) return prev;
+      return next;
+    });
+    setWsId(workspaces.find(w => w.id !== wsId)?.id || workspaces[0].id);
+    setSelectedProject(null);
+    setDrawerTask(null);
+  };
+  const handleResetData = () => {
+    BBStorage.clear();
+    const fresh = BBStorage.load();
+    setWorkspaces(fresh);
+    setWsId(fresh[0].id);
+    setSelectedProject(null);
+    setDrawerTask(null);
+  };
+  const handleAddArea = (wsId, area) => setWorkspaces(prev => addAreaInWs(prev, wsId, area));
+  const handleRenameArea = (wsId, areaId, name) => setWorkspaces(prev => updateAreaInWs(prev, wsId, areaId, { name }));
+  const handleDeleteArea = (wsId, areaId) => setWorkspaces(prev => deleteAreaInWs(prev, wsId, areaId));
+  const handleUpdateProject = (projId, updates) => setWorkspaces(prev => updateProjectInWs(prev, wsId, projId, updates));
+  const handleDeleteProject = (projId) => {
+    setWorkspaces(prev => deleteProjectInWs(prev, wsId, projId));
+    if (selectedProject === projId) setSelectedProject(null);
+  };
+  const handleReorderTask = (projId, taskId, targetIndex) => {
+    setWorkspaces(prev => reorderTaskInWs(prev, wsId, projId, taskId, targetIndex));
   };
 
   const handleSwitchWs = (id) => {
@@ -273,6 +402,18 @@ function App() {
         activeView={activeView}
         onSetView={setActiveView}
         theme={theme}
+        overdueMap={overdueMap}
+        onAddWorkspace={handleAddWorkspace}
+        onRenameWorkspace={handleRenameWorkspace}
+        onDeleteWorkspace={handleDeleteWorkspace}
+        onResetData={handleResetData}
+        onAddArea={handleAddArea}
+        onRenameArea={handleRenameArea}
+        onDeleteArea={handleDeleteArea}
+        onEditProject={(proj) => setEditingProject(proj)}
+        onDeleteProject={handleDeleteProject}
+        showArchived={showArchived}
+        onToggleArchived={() => setShowArchived(prev => !prev)}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
@@ -291,13 +432,17 @@ function App() {
 
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <ViewComponent
-            workspace={workspace}
+            workspace={visibleWorkspace}
             selectedProject={selectedProject}
             theme={theme}
             onOpenTask={handleOpenTask}
             onMoveTask={handleMoveTask}
             onAddTask={handleAddTask}
             onNewProject={() => setShowNewProject(true)}
+            overdueMap={overdueMap}
+            onReorderTask={handleReorderTask}
+            onEditProject={handleUpdateProject}
+            onDeleteProject={handleDeleteProject}
           />
         </div>
       </div>
