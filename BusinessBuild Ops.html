@@ -260,6 +260,15 @@ function App() {
   const [showNewProject, setShowNewProject] = React.useState(false);
   const [editingProject, setEditingProject] = React.useState(null);
 
+  // Toast state
+  const [toast, setToast] = React.useState(null);
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const handleExport = () => BBStorage.exportJSON(workspaces);
+  const handleImport = () => BBStorage.importJSON(
+    function(imported) { setWorkspaces(imported); setWsId(imported[0].id); showToast('Data imported — ' + imported.length + ' workspace(s) loaded'); },
+    function(err) { showToast('Import failed: ' + err); }
+  );
+
   React.useEffect(function() { BBStorage.save(workspaces); }, [workspaces]);
 
   const workspace = workspaces.find(w => w.id === wsId) || workspaces[0];
@@ -431,6 +440,16 @@ function App() {
           <span style={{ fontSize: 14, fontWeight: 600, color: theme.text, flex: 1 }}>
             {viewLabels[activeView]}
           </span>
+          <button onClick={handleExport} title="Export data as JSON" style={{
+            width: 30, height: 30, borderRadius: 7, border: `1px solid ${theme.border}`,
+            background: 'transparent', color: theme.mutedText, fontSize: 14,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>↓</button>
+          <button onClick={handleImport} title="Import data from JSON" style={{
+            width: 30, height: 30, borderRadius: 7, border: `1px solid ${theme.border}`,
+            background: 'transparent', color: theme.mutedText, fontSize: 14,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>↑</button>
           <NavTabs activeView={activeView} onSetView={setActiveView} theme={theme} />
         </div>
 
@@ -474,6 +493,15 @@ function App() {
         />
       )}
 
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#0d0f15', border: '1px solid rgba(0,229,212,0.35)',
+          color: '#00e5d4', fontSize: 13, fontWeight: 500,
+          padding: '10px 20px', borderRadius: 10, zIndex: 999,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+        }}>{toast}</div>
+      )}
 
     </div>
   );
