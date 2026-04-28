@@ -2,7 +2,7 @@
 window.APP_DEFAULT = {
   workspaces: [
     {
-      id: 'ws_' + Date.now(),
+      id: 'ws_default',
       name: 'My Workspace',
       abbr: 'MW',
       color: '#d4a017',
