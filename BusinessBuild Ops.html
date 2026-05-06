@@ -244,6 +244,92 @@ function NavTabs({ activeView, onSetView, theme }) {
     </div>
   );
 }
+function InboxItem({ item, workspace, onPlace, theme }) {
+  const [projId, setProjId] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const [selectedLabel, setSelectedLabel] = React.useState('');
+
+  const allProjects = [];
+  (workspace.areas || []).forEach(function(area) {
+    (area.projects || []).filter(function(p) { return p.status !== 'archived'; }).forEach(function(proj) {
+      allProjects.push({ id: proj.id, name: proj.name, area: area.name });
+    });
+  });
+
+  const PRIORITY_COLOR = { high: '#f87171', medium: '#fbbf24', low: '#6b7280' };
+
+  const handleSelect = function(p) {
+    setProjId(p.id);
+    setSelectedLabel(p.area + ' / ' + p.name);
+    setOpen(false);
+  };
+
+  return (
+    <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <span style={{ color: PRIORITY_COLOR[item.priority] || '#6b7280', fontSize: 10, fontWeight: 700, marginTop: 2, flexShrink: 0 }}>
+          {(item.priority || 'medium').toUpperCase()}
+        </span>
+        <span style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.4, flex: 1 }}>{item.content}</span>
+      </div>
+      {item.due_date && <span style={{ fontSize: 11, color: '#6b7280' }}>📅 {item.due_date}</span>}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', position: 'relative' }}>
+        {/* Custom dropdown */}
+        <div style={{ flex: 1, position: 'relative' }}>
+          <button
+            onClick={function() { setOpen(function(o) { return !o; }); }}
+            style={{
+              width: '100%', background: '#1e2029', border: '1px solid rgba(255,255,255,0.12)',
+              color: projId ? '#e2e8f0' : '#6b7280', borderRadius: 6, padding: '6px 10px',
+              fontSize: 12, cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}
+          >
+            <span>{selectedLabel || 'Select project...'}</span>
+            <span style={{ fontSize: 10, opacity: 0.5 }}>▾</span>
+          </button>
+          {open && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+              background: '#1a1d26', border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 8, zIndex: 9999, maxHeight: 200, overflowY: 'auto',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.7)',
+            }}>
+              {allProjects.length === 0 && (
+                <div style={{ padding: '10px 12px', fontSize: 12, color: '#6b7280' }}>No active projects found</div>
+              )}
+              {allProjects.map(function(p) {
+                return (
+                  <div
+                    key={p.id}
+                    onClick={function() { handleSelect(p); }}
+                    style={{
+                      padding: '8px 12px', fontSize: 12, color: '#e2e8f0', cursor: 'pointer',
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    }}
+                    onMouseEnter={function(e) { e.currentTarget.style.background = 'rgba(99,102,241,0.15)'; }}
+                    onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ color: '#6b7280', fontSize: 11 }}>{p.area} / </span>{p.name}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <button
+          disabled={!projId}
+          onClick={function() { if (projId) onPlace(item, projId); }}
+          style={{
+            background: projId ? '#6366f1' : '#1e2029', border: 'none',
+            color: projId ? '#fff' : '#4b5563', borderRadius: 6, padding: '6px 14px',
+            fontSize: 12, fontWeight: 600, cursor: projId ? 'pointer' : 'not-allowed', flexShrink: 0,
+          }}
+        >Place</button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const theme = NOIR;
 
@@ -265,6 +351,48 @@ function App() {
   const [editingProject, setEditingProject] = React.useState(null);
 
   const searchBtnRef = React.useRef(null);
+  const serverSyncDone = React.useRef(false);
+  const serverSaveTimer = React.useRef(null);
+
+  // Second Brain inbox queue
+  const [inboxOpen, setInboxOpen] = React.useState(false);
+  const [inboxItems, setInboxItems] = React.useState([]);
+  const [inboxLoading, setInboxLoading] = React.useState(false);
+
+  const fetchInbox = React.useCallback(function() {
+    setInboxLoading(true);
+    fetch('http://localhost:3000/api/queue')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { setInboxItems(d.queue || []); })
+      .catch(function() { setInboxItems([]); })
+      .finally(function() { setInboxLoading(false); });
+  }, []);
+
+  React.useEffect(function() {
+    fetchInbox();
+    var interval = setInterval(fetchInbox, 30000);
+    return function() { clearInterval(interval); };
+  }, [fetchInbox]);
+
+  const handlePlaceTask = function(item, projId) {
+    var newTask = {
+      id: 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      title: item.content,
+      status: 'todo',
+      priority: item.priority || 'medium',
+      due: item.due_date || '',
+      notes: 'Added from Second Brain',
+    };
+    setWorkspaces(function(prev) { return addTaskInWs(prev, wsId, projId, newTask); });
+    fetch('http://localhost:3000/api/queue', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id }),
+    }).then(function() {
+      setInboxItems(function(prev) { return prev.filter(function(i) { return i.id !== item.id; }); });
+    });
+    showToast('Task added to project');
+  };
 
   // Toast state
   const [toast, setToast] = React.useState(null);
@@ -280,7 +408,30 @@ function App() {
     function(err) { showToast('Import failed: ' + err); }
   );
 
-  React.useEffect(function() { BBStorage.save(workspaces); }, [workspaces]);
+  React.useEffect(function() {
+    BBStorage.save(workspaces); // localStorage immediately (fast, offline cache)
+    if (!serverSyncDone.current) return; // skip server save during initial load
+    clearTimeout(serverSaveTimer.current);
+    serverSaveTimer.current = setTimeout(function() {
+      BBStorage.saveToServer(workspaces);
+    }, 1500);
+  }, [workspaces]);
+
+  // On mount: load latest data from server, override localStorage
+  React.useEffect(function() {
+    BBStorage.loadFromServer(
+      function(serverWorkspaces) {
+        if (serverWorkspaces.length > 0) {
+          setWorkspaces(serverWorkspaces);
+          BBStorage.save(serverWorkspaces); // update localStorage cache
+        }
+        serverSyncDone.current = true;
+      },
+      function() {
+        serverSyncDone.current = true; // mark done even on error so saves still work
+      }
+    );
+  }, []);
 
   React.useEffect(function() {
     if (workspaces.length > 0 && !workspaces.find(function(w) { return w.id === wsId; })) {
@@ -502,7 +653,52 @@ function App() {
             background: 'transparent', color: theme.mutedText, fontSize: 14,
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>↑</button>
+          {/* Second Brain Inbox */}
+          <button
+            onClick={function() { setInboxOpen(function(p) { return !p; }); if (!inboxOpen) fetchInbox(); }}
+            title="Second Brain Inbox"
+            style={{
+              position: 'relative', background: inboxOpen ? 'rgba(99,102,241,0.15)' : 'none',
+              border: inboxOpen ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.08)',
+              color: inboxOpen ? '#818cf8' : '#6b7280',
+              cursor: 'pointer', padding: '4px 10px', borderRadius: 6,
+              display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 500,
+            }}
+          >
+            ⬇ Inbox
+            {inboxItems.length > 0 && (
+              <span style={{
+                background: '#6366f1', color: '#fff', borderRadius: 10,
+                fontSize: 10, fontWeight: 700, padding: '1px 5px', lineHeight: 1.4,
+              }}>{inboxItems.length}</span>
+            )}
+          </button>
           <NavTabs activeView={activeView} onSetView={setActiveView} theme={theme} />
+          {inboxOpen && (
+            <div style={{
+              position: 'absolute', top: 54, right: 0, width: 360, maxHeight: 480,
+              background: '#111318', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              zIndex: 200, overflow: 'visible', display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>Second Brain Inbox</span>
+                <button onClick={fetchInbox} style={{ background: 'none', border: 'none', color: '#4b5563', cursor: 'pointer', fontSize: 11 }}>↻ Refresh</button>
+              </div>
+              <div style={{ overflowY: 'visible', flex: 1 }}>
+                {inboxLoading && <div style={{ padding: 16, color: '#4b5563', fontSize: 13, textAlign: 'center' }}>Loading...</div>}
+                {!inboxLoading && inboxItems.length === 0 && (
+                  <div style={{ padding: 24, color: '#4b5563', fontSize: 13, textAlign: 'center' }}>
+                    No tasks waiting.<br/>
+                    <span style={{ fontSize: 11, color: '#374151' }}>Push tasks from Second Brain to see them here.</span>
+                  </div>
+                )}
+                {inboxItems.map(function(item) {
+                  return React.createElement(InboxItem, { key: item.id, item: item, workspace: workspace, onPlace: handlePlaceTask, theme: theme });
+                })}
+              </div>
+            </div>
+          )}
           {searchOpen && (
             <SearchPanel
               workspaces={workspaces}

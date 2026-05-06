@@ -84,5 +84,36 @@
     localStorage.removeItem(KEY);
   }
 
-  window.BBStorage = { load: load, save: save, exportJSON: exportJSON, importJSON: importJSON, clear: clear };
+  function loadFromServer(onSuccess, onError) {
+    var _onSuccess = onSuccess || function() {};
+    var _onError = onError || function() {};
+    fetch('/api/data')
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        if (data.workspaces && Array.isArray(data.workspaces)) {
+          _onSuccess(data.workspaces);
+        } else {
+          _onError('Invalid response from server');
+        }
+      })
+      .catch(function(err) {
+        console.warn('BBStorage: server load failed', err);
+        _onError(err);
+      });
+  }
+
+  function saveToServer(workspaces) {
+    fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaces: workspaces })
+    }).catch(function(err) {
+      console.warn('BBStorage: server save failed', err);
+    });
+  }
+
+  window.BBStorage = { load: load, save: save, exportJSON: exportJSON, importJSON: importJSON, clear: clear, loadFromServer: loadFromServer, saveToServer: saveToServer };
 })();
