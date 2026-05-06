@@ -8,6 +8,11 @@ const PORT = process.env.PORT || 8080;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname)));
 
+// Serve the app at root (filename has a space so no auto index.html)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'BusinessBuild Ops.html'));
+});
+
 // Only connect to DB if DATABASE_URL is set
 const pool = process.env.DATABASE_URL
   ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
